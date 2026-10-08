@@ -7,6 +7,7 @@
 //   node src/cli.mjs resume                    continue a stopped run from the state on disk (detached)
 //   node src/cli.mjs status | stop             look at it, or ask it to stop after the current window
 //   node src/cli.mjs dashboard                 serve the dashboard (live run, or --replay <state.json>)
+//   node src/cli.mjs state --out file.json     rebuild the state from the round files and save a copy for replay
 // Options: --run <name> (default "main"), --windows <n>, --only id,id, --finish-file <path>, --start-at <ISO time>, --port <n>, --keep-awake
 import {spawn, execFileSync} from 'node:child_process';
 import {existsSync, mkdirSync, writeFileSync, appendFileSync, openSync, rmSync} from 'node:fs';
@@ -127,9 +128,16 @@ if (command === 'check') {
   if (!existsSync(runDir)) { console.log(`No run named "${runName}".`); process.exit(1); }
   writeFileSync(path.join(runDir, 'stop'), new Date().toISOString());
   console.log(`Stop requested. The run finishes the window it is in, settles what it can and exits. Continue later with: node src/cli.mjs resume --run ${runName}`);
+} else if (command === 'state') {
+  // Rebuilds the dashboard state from the round files with the current code. --out <file> saves a copy (for replays).
+  const {buildState} = await import('./state.mjs');
+  const {writeJson} = await import('./util.mjs');
+  const state = buildState(runDir, {write: !flag('no-write')});
+  if (flag('out') && flag('out') !== true) { writeJson(String(flag('out')), state); console.log(`saved ${flag('out')}`); }
+  console.log(`state of run "${runName}": ${state.run.settled} settled of ${state.run.counted} counted windows, ${state.credits.total} Predictefy credits`);
 } else if (command === 'dashboard') {
   const {startServer} = await import('./server.mjs');
   startServer({runDir, port: Number(flag('port', config.dashboardPort)), replay: flag('replay') && flag('replay') !== true ? String(flag('replay')) : process.env.ARENA_REPLAY || null});
 } else {
-  console.log('Commands: check | pilot | launch | start | resume | status | stop | dashboard   (see the top of src/cli.mjs or the README)');
+  console.log('Commands: check | pilot | launch | start | resume | status | stop | state | dashboard   (see the top of src/cli.mjs or the README)');
 }

@@ -73,6 +73,7 @@ h2{margin:0 0 4px;font-size:19px;font-weight:600}
 .stats div{min-width:0}
 .stats small{display:block;font-size:12px;letter-spacing:.9px;text-transform:uppercase;color:var(--muted)}
 .stats b{font-size:18.5px;font-weight:600;white-space:nowrap}
+.cell .when{margin-top:8px;font-size:12.5px;color:var(--ink-2);border-top:1px solid var(--grid);padding-top:6px}
 .tri{display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;margin-right:5px;vertical-align:middle}
 .tri.up{border-bottom:8px solid var(--good)}.tri.down{border-top:8px solid var(--crit)}
 .side .card + .card{margin-top:10px}
@@ -231,6 +232,7 @@ const money = v => v == null ? '–' : (v < 0 ? '−$' : '+$') + Math.abs(v).toF
 const plain = v => v == null ? '–' : '$' + v.toFixed(2);
 const secs = v => v == null ? '–' : v < 10 ? v.toFixed(1) + ' s' : Math.round(v) + ' s';
 const utc = iso => iso ? iso.slice(11, 16) : '–';
+const clockOf = seconds => Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
 const num = (v, d = 0) => v == null ? '–' : Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d});
 let state = null, tab = 'grid', openRow = null, eqTable = false;
 
@@ -242,9 +244,9 @@ function tri(v) { const i = el('i', 'tri ' + (v >= 0 ? 'up' : 'down')); return i
 
 function renderHeader(s) {
   const r = s.run, replay = !!s.replay;
-  const label = replay ? 'Replay' : r.status === 'running' ? 'Live' : r.status === 'paused' ? 'Paused' : (r.status || '').startsWith('finished') ? 'Finished' : r.status || '–';
+  const label = replay ? 'Replay' : r.status === 'waiting to start' ? 'Waiting to start' : r.status === 'running' ? 'Live' : r.status === 'paused' ? 'Paused' : (r.status || '').startsWith('finished') ? 'Finished' : r.status || '–';
   $('#status').textContent = label;
-  $('#dot').className = 'dot ' + (replay ? 'replay' : r.status === 'running' ? '' : r.status === 'paused' ? 'busy' : (r.status || '').startsWith('finished') ? 'replay' : 'bad');
+  $('#dot').className = 'dot ' + (replay ? 'replay' : r.status === 'waiting to start' ? 'busy' : r.status === 'running' ? '' : r.status === 'paused' ? 'busy' : (r.status || '').startsWith('finished') ? 'replay' : 'bad');
   $('#progress').textContent = `${r.settled} of ${r.target} settled` + (r.counted > r.settled ? ` · ${r.counted - r.settled} open` : '') + (r.voided ? ` · ${r.voided} void` : '');
   $('#credits').textContent = num(s.credits.total);
   $('#note').textContent = replay ? `Saved state of ${s.generatedAt.slice(0, 16).replace('T', ' ')} UTC` : r.pausedUntil ? `Paused: ${r.pauseReason}` : `Started ${r.startedAt ? r.startedAt.slice(11, 16) : '–'} UTC${r.expectedEndAt ? ' · last window closes ' + r.expectedEndAt.slice(11, 16) + ' UTC' : ''}`;
@@ -274,12 +276,13 @@ function renderMatrix(s) {
       stat('Missed', v ? String(sc.missedAll ?? 0) : '–');
       stat('Median', secs(sc.medianAnswerSecondsAll));
       cell.append(hit, meter, stats);
+      if (sc.windows && sc.answered < sc.windows) { const w = el('div', 'when'); w.textContent = sc.answered ? `When it answered in time: ${pct(sc.answeredHitRate, 0)} right way (${num(sc.answeredHits, sc.answeredHits % 1 ? 1 : 0)} of ${sc.answered}), Brier ${sc.answeredBrier.toFixed(3)}` : 'It never answered in time'; cell.append(w); }
       cell.title = v ? `${name}, ${e} effort. ${sc.betsPlaced ?? 0} bets placed, ${sc.lateAll ?? 0} answers too late to bet, ${sc.noAnswerAll ?? 0} with no answer in time.` : '';
       root.append(cell);
     }
   }
   $('#gridsrc').textContent = '';
-  const src = $('#gridsrc'); src.append(document.createTextNode('Hit rate and Brier: every counted window, bet or not. Lower Brier is better; always saying 50% scores 0.250. Shaded strip: the range a coin flip lands in. Missed: windows where the answer came too late to bet, or not at all.'));
+  const src = $('#gridsrc'); src.append(document.createTextNode('Hit rate and Brier: every counted window, bet or not. Lower Brier is better; always saying 50% scores 0.250. Shaded strip: the range a coin flip lands in. Missed: windows with no answer by the deadline (no bet, scored as a coin flip). Median: seconds from the snapshot to the answer.'));
 }
 
 function renderSide(s) {
@@ -289,6 +292,7 @@ function renderSide(s) {
   const l = $('#luck'); l.textContent = '';
   if (!s.luck) { l.append(el('p', null, 'No settled windows yet.')); return; }
   const k = s.luck, c = k.coinFlip;
+  if (k.windows < 10) { l.append(el('p', null, `Only ${k.windows} window${k.windows === 1 ? '' : 's'} settled so far. With so few, any hit rate from 0% to 100% is ordinary luck.`)); return; }
   const p1 = el('p'); p1.append('Over ', el('b', null, `${k.windows} windows`), ', a coin flip lands between ', el('b', null, `${pct(c.lowRate, 0)} and ${pct(c.highRate, 0)}`), ` 19 times in 20. A version needs ${c.needHitsToBeat} right (${pct(c.needRateToBeat, 0)}) before it stands out.`); l.append(p1);
   const p2 = el('p'); p2.append('The best of nine coin flips would average ', el('b', null, pct(k.bestOfNine.expectedRate, 0)), '. So a top score near that proves nothing.'); l.append(p2);
   const out = k.versusFavourite.filter(x => !x.insideLuck).length;
@@ -348,7 +352,7 @@ function renderWindows(s) {
   const t = $('#wintable'); t.textContent = '';
   const h1 = el('tr'); for (let i = 0; i < 6; i++) h1.append(el('th', 'model'));
   for (const [m, name] of MODELS) { const th = el('th', 'model'); th.colSpan = 3; const i = el('i'); i.style.background = color(`${m}-high`); th.append(i, document.createTextNode(name)); h1.append(th); }
-  const h2 = el('tr'); for (const [c, l] of [['#', 'l'], ['UTC', 'l'], ['BTC at open', ''], ['Move at 1:00', ''], ['Up price', ''], ['Result', 'l']]) h2.append(el('th', l, c));
+  const h2 = el('tr'); for (const [c, l] of [['#', 'l'], ['UTC', 'l'], ['BTC at open', ''], ['Move at ' + clockOf(s.rules.snapshotSecond), ''], ['Up price', ''], ['Result', 'l']]) h2.append(el('th', l, c));
   for (let k = 0; k < 3; k++) for (const e of EFFORTS) h2.append(el('th', null, e));
   t.append(h1, h2);
   const rows = [...s.windows].reverse();

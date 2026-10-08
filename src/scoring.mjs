@@ -27,12 +27,18 @@ export function scoreRows(rows) {
   const hits = rows.reduce((sum, r) => sum + hitValue(r.pUp, r.winner), 0);
   const brierSum = rows.reduce((sum, r) => sum + brier(r.pUp, r.winner), 0);
   const bets = rows.filter(r => r.bet);
+  // The same two scores over only the windows it answered in time, to tell forecast quality apart from speed.
+  const answeredRows = rows.filter(r => r.pUp != null);
+  const answeredHits = answeredRows.reduce((sum, r) => sum + hitValue(r.pUp, r.winner), 0);
   return {
     windows: n,
     hits,
     hitRate: n ? hits / n : null,
     brier: n ? brierSum / n : null,
     answered: rows.filter(r => r.pUp != null).length,
+    answeredHits,
+    answeredHitRate: answeredRows.length ? answeredHits / answeredRows.length : null,
+    answeredBrier: answeredRows.length ? answeredRows.reduce((sum, r) => sum + brier(r.pUp, r.winner), 0) / answeredRows.length : null,
     noAnswer: rows.filter(r => r.status === 'no_answer').length,
     late: rows.filter(r => r.status === 'late').length,
     missed: rows.filter(r => r.status === 'late' || r.status === 'no_answer').length,

@@ -272,6 +272,9 @@ export async function runArena({runDir, config, target = config.windows, only = 
     while ((t0 + config.snapshotSecond) * 1000 - Date.now() < 15000 || rounds.some(r => r.t0 === t0)) t0 += config.windowSeconds;
     run.expectedEndAt = new Date((t0 + (target - counted) * config.windowSeconds) * 1000).toISOString();
     saveRun();
+    // Wait for the window here, where a stop request is still honoured: once a window's calls are out it is played to the end.
+    while (Date.now() < (t0 + config.snapshotSecond) * 1000 - 13000 && !existsSync(stopFile)) await sleep(Math.min(1000, (t0 + config.snapshotSecond) * 1000 - 13000 - Date.now()));
+    if (existsSync(stopFile)) continue;
     let r;
     try { r = await playWindow(t0); }
     catch (e) {
