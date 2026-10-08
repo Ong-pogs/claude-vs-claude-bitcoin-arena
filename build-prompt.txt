@@ -1,0 +1,55 @@
+Build a local test harness called "claude-vs-claude-bitcoin-arena". It makes nine versions of Claude paper-trade Polymarket's 5-minute "Bitcoin Up or Down" market against each other under identical conditions, using the Predictefy API for every number the models see. Node 22.12 or newer, ES modules, no dependencies, no build step. It must never place a real order and never ask for a wallet key.
+
+CONTESTANTS
+Nine: claude-opus-5-5, claude-sonnet-5-5 and claude-haiku-5-5, each at effort low, high and max. Keep them in config/arena.json with an id like "opus-low". Call each through the Claude Code command line, never an API key:
+
+  claude -p --model <model> --effort <effort> --system-prompt "<fixed text>" --tools "" --safe-mode --setting-sources "" --strict-mcp-config --disable-slash-commands --no-session-persistence --output-format stream-json --verbose
+
+The prompt goes in on stdin. Run it from a new empty temporary folder. Remove every CLAUDE*, ANTHROPIC* and AI_AGENT environment variable inherited from the parent, then set CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1 and DISABLE_AUTOUPDATER=1. Copy the claude program into the run folder once and use that copy for the whole run, so an update cannot change the version mid-run. Parse the stream-json lines: keep the init event (model, tools, mcp_servers, skills, plugins), the rate_limit_event, and the result event (text, is_error, api_error_status, num_turns, usage, modelUsage, total_cost_usd). Fire a callback the moment the result line arrives. Save the raw output of every call.
+
+After each call check: the init model equals the model asked for, modelUsage names that model and no other, tools and mcp_servers are empty, no skills, only built-in plugins, exactly one turn, no web search. If a check fails, treat the call as failed. Classify every call as ok, timeout (killed at the deadline), blocked (the Claude plan's limit: API status 429, a rate limit status that is not "allowed", or limit wording in the error), or error.
+
+PREDICTEFY (base https://data.predictefy.com, header Authorization: Bearer <PREDICTEFY_API_KEY from .env>)
+- GET /api/polymarket/fetchMarkets?slug=btc-updown-5m-<window start, unix seconds>&status=all&limit=1 (1 credit): title, description (the settlement rule), and the Up and Down outcomes with their outcomeId.
+- GET /api/polymarket/fetchOrderBook?outcomeId=<id> (5 credits): bids and asks as {price, size}, prices in dollars per share, sizes in shares.
+- GET /api/feeds/chainlink/fetchOracleHistory?symbol=BTC/USD&limit=30 (2 credits): Chainlink rounds {roundId, answer, updatedAt in unix seconds}, newest first, one about every 33 seconds.
+Meter every call: path, status, milliseconds, the x-credits-charged and x-credits-remaining headers. Print one log line per call and append it to predictefy-calls.jsonl. Never print the key. Retry 429 and 5xx twice with a short backoff. On 402 or PLAN_REQUIRED print https://predictefy.com/en/api as the upgrade link.
+
+ONE ROUND PER 5-MINUTE WINDOW (window start t0 is a multiple of 300 seconds)
+1. At t0+33s look up the market. At t0+45s read both order books and the Chainlink rounds in parallel and build one snapshot:
+   - window: opens, closes, seconds in, seconds left.
+   - bitcoin: the last Chainlink value at or before the open (the reference), values since the open, the latest value and its age, change since the open in dollars and percent, the value at each of the 10 minutes before the open, the minute-to-minute changes, their average and largest size. Never use a round published after the snapshot instant. State in the snapshot that this is Chainlink's on-chain feed read through Predictefy and that the market settles on Chainlink's 60-second TWAP data stream, which can differ by a few dollars.
+   - market: best bid, best ask, sizes and mid for Up and Down, and what $5 buys right now on each side (shares, average price, fee, cost, payout if right).
+2. Build one prompt: the market title and its rule word for word, the snapshot JSON, what to answer, and how the answer is used. Ask for one JSON object: {"p_up": number between 0 and 1, "call": "up" | "down" | "skip", "reason": one short sentence}. Tell the model its answer must arrive by 285 seconds into the window. Save the prompt and its SHA-256.
+3. Shuffle the nine with a seeded generator (seed, "order", t0) and start all nine in the same tick. Log each start and finish time.
+4. When an answer arrives, parse it strictly (p_up must be a number from 0 to 1, call must be up, down or skip; anything else is no valid answer). If the call is up or down and the version has $5 of free cash, read that side's order book through Predictefy and fill the bet (see FILL). Log the fill with the label "simulated at the live Predictefy order book".
+5. At t0+285s kill any call still running: a missed window, no bet.
+6. If any call was blocked or failed for a reason that was not the model's, the whole window is void for all nine and does not count; after a blocked window pause until the limit's reset time.
+7. After the close: at t0+320s read both order books again (the winning side is bid at 0.95 or more) and the Chainlink rounds, as a cross-check. Then poll https://gamma-api.polymarket.com/markets?closed=true&slug=<slug> every 30 seconds until closed is true and outcomePrices is ["1","0"] or ["0","1"]: that is the result of record. Save its eventMetadata.priceToBeat and finalPrice. Settle the bets on it.
+Repeat until 72 windows are counted.
+
+FILL (pure function, unit-tested)
+Sort asks by price. Walk from the cheapest. At each level buy min(level size, remaining cash / (price + fee per share)) rounded down to 0.01 share; fee per share is 0.07 x price x (1 - price); the fee for a level is shares x that, rounded to 5 decimals. Total cost including fees never exceeds $5. Never buy past displayed depth. Fewer than 5 shares in total is no fill. Return shares, average price, fee, cost, the levels used and a reason when nothing was filled.
+
+LEDGER
+$100 budget per version. Free cash = 100 - cost of every bet + payout of every settled bet. A winning share pays $1, a losing share nothing.
+
+BASELINES (same snapshot, stake and fee, filled at the snapshot's own books)
+random (seeded pick), favourite (the side whose mid is above 0.5; its probability is the Up mid), momentum (the sign of the Chainlink change since the open).
+
+SCORING (pure functions, unit-tested), over counted and settled windows, for every version whether it bet or not
+- hit: 1 if p_up leaned the right way, 0 if the wrong way, 0.5 if p_up is exactly 0.5 or there was no valid answer in time.
+- Brier: (p_up - outcome)^2 with outcome 1 for Up; no answer counts as 0.5.
+- profit, bets, missed windows, median answer time.
+- luck: the range of hits a fair coin lands in 95% of the time over n windows (exact binomial), the expected best of nine fair coins, and for every pair of versions a two-sided sign test on the windows where one was right and the other wrong.
+
+STATE AND RESUME
+Everything lives in runs/<name>/: config.json, run.json (status, process id, heartbeat, expected end), rounds/<t0>.json (snapshot, prompt, order, calls, answers, bets, baselines, Predictefy calls, result), calls/<t0>/<id>.jsonl, predictefy-calls.jsonl, state.json, run.log. Write files atomically. A round that was in flight when the process died is void. On start, settle any round still waiting for its result, then continue.
+
+COMMANDS (node src/cli.mjs ...)
+check (one snapshot, no Claude calls), pilot (--windows, --only), start, launch (a detached background process; on Windows create it through WMI Win32_Process with a hidden window so it survives the terminal), resume, status, stop (a stop file), dashboard (--replay <state.json>, port 8821). Options --run, --windows, --finish-file, --start-at, --keep-awake.
+
+DASHBOARD (one HTML file, no libraries, dark, large type for video at 1920x985)
+Tabs: The grid (a 3x3 grid, models down and effort across, each cell with hit rate, a strip showing the coin-flip range, Brier, profit, missed windows and median answer time; the three baselines; a "how much could be luck" card; paper equity as three small charts, one per model, with low/high/max as three steps of that model's hue and the baselines in grey, with a crosshair tooltip and a table view). Every window (a table of windows with each version's p_up, call, hit and profit; click a row for each version's stated reason, answer time and fill). One snapshot (the Predictefy calls for one window with credits and milliseconds, the top of both order books, the Chainlink rounds, and the JSON every version was sent). Rules and proof (the rules from config, the command, the model each call reported with median tokens and answer time, and a "what this costs to run" box: credits this run, per window, and how long Predictefy's free 25,000 credits last). Name the Predictefy endpoint behind every number.
+
+Also write a README, an MIT LICENSE, .env.example with a placeholder key, .gitignore (.env, runs/), and unit tests for the fill walk, the fee, settlement, scoring, the luck range, the snapshot, answer parsing and the baselines.

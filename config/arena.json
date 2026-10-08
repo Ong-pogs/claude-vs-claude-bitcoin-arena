@@ -1,0 +1,42 @@
+{
+  "name": "nine-claudes-trade-bitcoin",
+  "venue": "polymarket",
+  "slugPrefix": "btc-updown-5m-",
+  "windowSeconds": 300,
+  "windows": 72,
+  "maxWindowsAttempted": 96,
+
+  "snapshotSecond": 45,
+  "betCutoffSecond": 285,
+  "answerDeadlineSecond": 285,
+  "snapshot": { "minuteMarks": 10, "chainlinkRounds": 30 },
+
+  "betRule": "call",
+  "stakeUsd": 5,
+  "budgetUsd": 100,
+  "minShares": 5,
+  "fee": { "rate": 0.07, "exponent": 1, "source": "Polymarket taker fee for crypto markets: shares x 0.07 x price x (1 - price), https://docs.polymarket.com/trading/fees" },
+
+  "seed": 20261008,
+  "contestants": [
+    { "id": "opus-low",    "model": "claude-opus-5-5",   "modelLabel": "Opus 5.5",   "effort": "low"  },
+    { "id": "opus-high",   "model": "claude-opus-5-5",   "modelLabel": "Opus 5.5",   "effort": "high" },
+    { "id": "opus-max",    "model": "claude-opus-5-5",   "modelLabel": "Opus 5.5",   "effort": "max"  },
+    { "id": "sonnet-low",  "model": "claude-sonnet-5-5", "modelLabel": "Sonnet 5.5", "effort": "low"  },
+    { "id": "sonnet-high", "model": "claude-sonnet-5-5", "modelLabel": "Sonnet 5.5", "effort": "high" },
+    { "id": "sonnet-max",  "model": "claude-sonnet-5-5", "modelLabel": "Sonnet 5.5", "effort": "max"  },
+    { "id": "haiku-low",   "model": "claude-haiku-5-5",  "modelLabel": "Haiku 5.5",  "effort": "low"  },
+    { "id": "haiku-high",  "model": "claude-haiku-5-5",  "modelLabel": "Haiku 5.5",  "effort": "high" },
+    { "id": "haiku-max",   "model": "claude-haiku-5-5",  "modelLabel": "Haiku 5.5",  "effort": "max"  }
+  ],
+
+  "claude": {
+    "command": "claude",
+    "flags": ["--tools", "", "--safe-mode", "--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands", "--no-session-persistence", "--output-format", "stream-json", "--verbose"],
+    "env": { "CLAUDE_CODE_DISABLE_ADVISOR_TOOL": "1", "DISABLE_AUTOUPDATER": "1" }
+  },
+
+  "blocks": { "pauseAfterVoidedInARow": 1, "defaultPauseSeconds": 600, "maxPauseSeconds": 19800 },
+  "settlement": { "bookReadSecondsAfterClose": 20, "venuePollSeconds": 30, "venueGiveUpSeconds": 3600 },
+  "dashboardPort": 8821
+}
