@@ -48,6 +48,7 @@ node src/cli.mjs dashboard        # http://localhost:8821
 | `status` | Status, heartbeat, windows counted and each version's numbers |
 | `stop` | Asks the run to stop after the window it is in |
 | `resume` | Continues a stopped or interrupted run from the state on disk |
+| `state` | Rebuilds `state.json` from the window files. `--out file.json` saves a copy for replays |
 | `dashboard` | Serves the dashboard. `--replay path/to/state.json` shows a saved state without touching the API |
 
 Add `--run <name>` to keep several runs apart. Everything a run produces is in `runs/<name>/`: one file per window, the raw Claude Code output of every call, every Predictefy call, and `state.json`.
