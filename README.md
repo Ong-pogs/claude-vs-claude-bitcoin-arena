@@ -17,7 +17,7 @@ Every 5 minutes, for as many windows as you ask for (72 by default, which is 6 h
 5. **Result.** Bets settle on the result Polymarket publishes. Predictefy's last order book and its Chainlink feed are saved next to it as a cross-check.
 6. **Score.** Hit rate and Brier score use every window for every version, bet or not. Three baselines that are not AI (a random pick, the market favourite, Bitcoin's direction since the open) play the same windows.
 
-The dashboard shows the three-by-three grid, the paper money window by window, every window with each version's stated reason, one snapshot with the Predictefy calls behind it, the rules, and what the run cost in credits.
+The dashboard shows the three-by-three grid, how the answers and bets compare with the market's favourite, the paper money window by window, every window with each version's stated reason, one snapshot with the Predictefy calls behind it, the rules, and what the run cost in credits and in Claude calls at list prices.
 
 ## Quick start
 
@@ -41,7 +41,7 @@ node src/cli.mjs dashboard        # http://localhost:8821
 
 | Command | What it does |
 |---|---|
-| `check` | Reads one snapshot and prints it. Add `--prompt` to print the exact prompt every version would get |
+| `check` | Reads one snapshot and prints it. Add `--prompt` to print the exact prompt every version would get, `--balance` to print the credits left on your key |
 | `pilot` | A short trial in its own folder. `--windows 2`, `--only opus-low,haiku-max` |
 | `launch` | Starts the full run as a background process that keeps going after you close the terminal. `--start-at 2026-10-08T11:25:00Z` holds the first window until then |
 | `start` | The same run in the terminal you are looking at |
@@ -65,7 +65,7 @@ Add `--run <name>` to keep several runs apart. Everything a run produces is in `
 
 That is 25 credits for a window where nobody bets and 70 when all nine do. Predictefy's free plan gives 25,000 credits a month, enough for several six-hour runs. The dashboard shows what your own run used. If the API answers that your plan does not cover a request, the tool prints the upgrade link.
 
-**Claude.** The calls go through your Claude Code login, so they count against your Claude plan: 9 calls per window. The low and high effort calls are small. The max effort calls think for one to four minutes each and are most of the usage. To try the idea cheaply, run a pilot with `--only haiku-low,haiku-high,sonnet-low`.
+**Claude.** The calls go through your Claude Code login, so they count against your Claude plan: 9 calls per window. The low and high effort calls are small. The max effort calls think for one to four minutes each and are most of the usage. The dashboard's "Rules and proof" tab shows what Claude Code reports each version's finished calls would cost at list prices. To try the idea cheaply, run a pilot with `--only haiku-low,haiku-high,sonnet-low`.
 
 ## The rules
 
