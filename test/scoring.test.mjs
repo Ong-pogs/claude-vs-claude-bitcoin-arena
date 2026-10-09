@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {hitValue, brier, scoreRows, coinFlipBand, bestOfCoinFlips, pairedGap, binomialCdf, median, independentGapNeeded} from '../src/scoring.mjs';
+import {hitValue, brier, scoreRows, marketSides, coinFlipBand, bestOfCoinFlips, pairedGap, binomialCdf, median, independentGapNeeded} from '../src/scoring.mjs';
 
 const near = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) <= eps, `${a} is not within ${eps} of ${b}`);
 
@@ -25,6 +25,18 @@ test('scoreRows: every window counts, bet or not', () => {
   near(s.brier, (0.09 + 0.36 + 0.01 + 0.25) / 4);
   assert.equal(s.bets, 1); assert.equal(s.skips, 1); assert.equal(s.late, 1); assert.equal(s.noAnswer, 1); assert.equal(s.missed, 2);
   near(s.pnlUsd, 2); assert.equal(s.medianAnswerSeconds, 6);
+});
+
+test('marketSides: leans and bets counted with or against the favourite at the snapshot', () => {
+  const s = marketSides([
+    {pUp: 0.7, favourite: 'up', bet: {side: 'up'}, won: true, pnlUsd: 2},
+    {pUp: 0.4, favourite: 'up', bet: {side: 'down'}, won: false, pnlUsd: -5},
+    {pUp: 0.5, favourite: 'down', bet: null, won: null, pnlUsd: null},
+    {pUp: null, favourite: 'down', bet: null, won: null, pnlUsd: null},
+    {pUp: 0.2, favourite: null, bet: {side: 'down'}, won: true, pnlUsd: 1},
+  ]);
+  assert.equal(s.answers, 3); assert.equal(s.sameSide, 1); assert.equal(s.otherSide, 1); near(s.sameSideRate, 1 / 3);
+  assert.deepEqual(s.withFavourite, {bets: 1, won: 1, pnlUsd: 2}); assert.deepEqual(s.againstFavourite, {bets: 1, won: 0, pnlUsd: -5});
 });
 
 test('median', () => { assert.equal(median([3, 1, 2]), 2); assert.equal(median([4, 1, 2, 3]), 2.5); assert.equal(median([]), null); assert.equal(median([null, 5]), 5); });

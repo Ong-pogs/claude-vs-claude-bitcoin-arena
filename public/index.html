@@ -117,7 +117,9 @@ tr.detail td{background:var(--surface-2);white-space:normal;text-align:left;padd
 .reasons .meta{font-family:var(--mono);font-size:12px;color:var(--muted);display:block;margin-top:2px}
 .res{display:inline-flex;align-items:center;gap:6px;font-weight:600}
 .arrow{font-size:13px}
-.tablewrap{max-height:760px;overflow:auto;border-radius:10px}
+.tablewrap{max-height:648px;overflow:auto;border-radius:10px}
+#checks{max-width:1180px;line-height:1.5}
+#tab-rules{padding-bottom:120px}
 
 /* ---- one snapshot ---- */
 .snap{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr) minmax(0,1.05fr);gap:14px}
@@ -144,6 +146,7 @@ ol{margin:0;padding-left:24px}ol li{margin:0 0 8px;font-size:15.5px;line-height:
 .cost small{display:block;font-size:12px;letter-spacing:.9px;text-transform:uppercase;color:var(--muted)}
 .cost b{font-size:24px;font-weight:600}
 .cost span{display:block;font-size:13px;color:var(--ink-2)}
+.cost div.wide{grid-column:1/-1}
 #tip{position:fixed;pointer-events:none;z-index:9;background:#0d0d0df2;border:1px solid #ffffff2e;border-radius:10px;padding:9px 12px;font-size:13.5px;display:none;min-width:190px;box-shadow:0 8px 28px #000a}
 #tip .t{color:var(--ink-2);margin-bottom:5px}
 #tip .r{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:center}
@@ -181,6 +184,7 @@ ol{margin:0;padding-left:24px}ol li{margin:0 0 8px;font-size:15.5px;line-height:
       <div class="side">
         <div class="card"><h2>Not AI</h2><p class="sub">Three plain rules on the same snapshots, same stake and fee.</p><div class="base" id="baselines"></div></div>
         <div class="card luck"><h2>How much could be luck</h2><div id="luck"></div></div>
+        <div class="card luck"><h2>With or against the market</h2><div id="market"></div></div>
       </div>
     </div>
     <div class="card equity">
@@ -194,6 +198,7 @@ ol{margin:0;padding-left:24px}ol li{margin:0 0 8px;font-size:15.5px;line-height:
   <section id="tab-windows">
     <div class="card">
       <div style="display:flex;align-items:baseline;gap:14px"><h2>Every window</h2><p class="sub" style="margin:0">Each version's probability that Bitcoin finishes up, its call, and what its bet made. Click a row for the reasons.</p></div>
+      <div class="src" style="margin-top:6px" id="checks"></div>
       <div class="tablewrap" style="margin-top:8px"><table id="wintable"></table></div>
       <div class="src" style="margin-top:8px"><b>Bitcoin</b> GET /api/feeds/chainlink/fetchOracleHistory · <b>Up price</b> GET /api/polymarket/fetchOrderBook · <b>Result</b> Polymarket's published resolution, checked against Predictefy's last order book</div>
     </div>
@@ -297,6 +302,20 @@ function renderSide(s) {
   const p2 = el('p'); p2.append('The best of nine coin flips would average ', el('b', null, pct(k.bestOfNine.expectedRate, 0)), '. So a top score near that proves nothing.'); l.append(p2);
   const out = k.versusFavourite.filter(x => !x.insideLuck).length;
   const p3 = el('p'); p3.append(el('b', null, `${k.pairsOutsideLuck} of ${k.pairs.length}`), ' gaps between two versions are bigger than luck explains, and ', el('b', null, `${out} of 9`), ' versions differ from the market favourite by more than luck.'); l.append(p3);
+  renderMarket(s);
+}
+
+// How the nine versions' answers and bets compare with the favourite: the side priced above 50 cents at the snapshot.
+function renderMarket(s) {
+  const box = $('#market'); box.textContent = '';
+  const m = s.versusMarket;
+  if (!m || !m.answers) { box.append(el('p', null, 'No settled windows yet.')); return; }
+  const p = el('p'); p.append(el('b', null, pct(m.sameSideRate, 0)), ` of the ${num(m.answers)} answers leaned the same way as the market favourite.`); box.append(p);
+  const g = el('div', 'base'); g.style.marginTop = '9px';
+  for (const h of ['Bets', 'Placed', 'Won', 'Profit']) g.append(el('span', 'h', h));
+  const all = {bets: m.withFavourite.bets + m.againstFavourite.bets, won: m.withFavourite.won + m.againstFavourite.won, pnlUsd: m.withFavourite.pnlUsd + m.againstFavourite.pnlUsd};
+  for (const [label, t] of [['With the favourite', m.withFavourite], ['Against it', m.againstFavourite], ['All nine, every bet', all]]) { g.append(el('span', 'n', label), el('b', 'num', String(t.bets)), el('b', 'num', String(t.won))); const b = el('b', 'num'); if (t.bets) b.append(tri(t.pnlUsd), document.createTextNode(money(t.pnlUsd))); else b.textContent = '–'; g.append(b); }
+  box.append(g);
 }
 
 function seriesFor(s, m) {
@@ -349,6 +368,9 @@ function showTip(ev, title, rows) { const t = $('#tip'); t.textContent = ''; t.a
 function hideTip() { $('#tip').style.display = 'none'; }
 
 function renderWindows(s) {
+  // How often the two Predictefy cross-checks named the same winner as the published result.
+  const k = s.resultChecks, checks = $('#checks'); checks.textContent = '';
+  if (k?.settled) checks.append(el('b', null, 'Cross-check'), ` Predictefy's last order book named the published winner in ${k.bookAgrees} of ${k.bookKnown} windows. Its Chainlink feed pointed the same way in ${k.chainlinkAgrees} of ${k.chainlinkKnown}: it is Chainlink's on-chain feed, not the data stream the market settles on.`);
   const t = $('#wintable'); t.textContent = '';
   const h1 = el('tr'); for (let i = 0; i < 6; i++) h1.append(el('th', 'model'));
   for (const [m, name] of MODELS) { const th = el('th', 'model'); th.colSpan = 3; const i = el('i'); i.style.background = color(`${m}-high`); th.append(i, document.createTextNode(name)); h1.append(th); }
@@ -381,7 +403,7 @@ function renderWindows(s) {
       const head = el('div', 'src'); head.style.marginBottom = '8px'; head.textContent = `${w.title || w.slug} · snapshot ${w.snapshot?.secondsIn ?? '–'} s in · Up ${w.snapshot?.upBid ?? '–'}/${w.snapshot?.upAsk ?? '–'} · Down ${w.snapshot?.downBid ?? '–'}/${w.snapshot?.downAsk ?? '–'}` + (w.result ? ` · Polymarket: price to beat $${num(w.result.priceToBeat, 2)}, final $${num(w.result.finalPrice, 2)} · Predictefy's last book says ${w.result.bookWinner || 'n/a'} · credits ${w.credits}` : '') + (w.void ? ` · thrown out: ${w.void.reason}` : '');
       td.append(head);
       const g = el('div', 'reasons');
-      for (const [m, name] of MODELS) for (const e of EFFORTS) { const a = w.answers[`${m}-${e}`]; const box = el('div'); box.append(el('b', null, `${name} ${e}: `), document.createTextNode(a?.reason || a?.noBetReason || 'no answer')); const meta = el('span', 'meta'); meta.textContent = a ? `${a.answerSeconds != null ? a.answerSeconds.toFixed(1) + ' s' : 'no answer'}${a.thinkingTokens != null ? ' · ' + num(a.thinkingTokens) + ' thinking tokens' : ''}${a.bet ? ` · ${a.bet.side} ${a.bet.shares} sh @ ${a.bet.avgPrice.toFixed(3)} (snapshot ask ${a.bet.snapshotAsk}) fee $${a.bet.feeUsd.toFixed(3)}` : a.noBetReason ? ' · ' + a.noBetReason : ''}` : ''; box.append(meta); g.append(box); }
+      for (const [m, name] of MODELS) for (const e of EFFORTS) { const a = w.answers[`${m}-${e}`]; const box = el('div'); box.append(el('b', null, `${name} ${e}: `), document.createTextNode(a?.reason || a?.noBetReason || 'no answer')); const meta = el('span', 'meta'); meta.textContent = a ? `${a.answerSeconds != null ? a.answerSeconds.toFixed(1) + ' s' + (a.secondsIntoWindow != null ? `, answered ${clockOf(Math.round(a.secondsIntoWindow))} into the window` : '') : 'no answer'}${a.thinkingTokens != null ? ' · ' + num(a.thinkingTokens) + ' thinking tokens' : ''}${a.bet ? ` · ${a.bet.side} ${a.bet.shares} sh @ ${a.bet.avgPrice.toFixed(3)} (snapshot ask ${a.bet.snapshotAsk}) fee $${a.bet.feeUsd.toFixed(3)}` : a.noBetReason ? ' · ' + a.noBetReason : ''}` : ''; box.append(meta); g.append(box); }
       td.append(g); d.append(td); t.append(d);
     }
   }
@@ -391,9 +413,13 @@ function renderSnapshot(s) {
   const i = s.inspect;
   if (!i) { $('#calls').textContent = ''; $('#calls').append(el('div', 'empty', 'No snapshot yet.')); return; }
   $('#snaptitle').textContent = `The Predictefy calls behind window ${i.index}`;
-  $('#snapsub').textContent = `${i.title || i.slug}. ${i.predictefy.length} calls, ${i.predictefy.reduce((a, c) => a + c.credits, 0)} credits for this window.`;
+  // The snapshot is the first calls of a window; the rest are the order books read when a bet fills and the result check.
+  const forSnapshot = call => /snapshot|find the market/.test(call.purpose), credits = list => list.reduce((a, x) => a + x.credits, 0);
+  const snapCalls = i.predictefy.filter(forSnapshot);
+  $('#snapsub').textContent = `${i.title || i.slug}. The snapshot: ${snapCalls.length} calls, ${credits(snapCalls)} credits. With the fills and the result check: ${i.predictefy.length} calls, ${credits(i.predictefy)} credits for this window.`;
   const c = $('#calls'); c.textContent = '';
-  for (const call of i.predictefy) { const row = el('div'); row.append(el('span', 't', call.at.slice(11, 19)), el('span', 'path', 'GET ' + call.path), el('span', 'cr num', `${call.credits} cr`), el('span', 'why', `${call.purpose} · ${call.status} in ${call.ms} ms`)); c.append(row); }
+  let divided = false;
+  for (const call of i.predictefy) { if (!divided && !forSnapshot(call) && snapCalls.length) { divided = true; const note = el('p', 'label', 'After the snapshot: fills and the result check'); note.style.margin = '12px 0 2px'; c.append(note); } const row = el('div'); row.append(el('span', 't', call.at.slice(11, 19)), el('span', 'path', 'GET ' + call.path), el('span', 'cr num', `${call.credits} cr`), el('span', 'why', `${call.purpose} · ${call.status} in ${call.ms} ms`)); c.append(row); }
   const raw = $('#rawdata'); raw.textContent = '';
   if (i.raw) {
     const lad = el('div', 'ladder');
@@ -414,8 +440,8 @@ function renderSnapshot(s) {
 function renderRules(s) {
   const ol = $('#ruleslist'); ol.textContent = ''; for (const r of s.rules.text) ol.append(el('li', null, r));
   $('#cmd').textContent = s.command || '';
-  const t = $('#proof'); t.textContent = ''; const hr = el('tr'); for (const [c, l] of [['Version', 'l'], ['Model reported', 'l'], ['Calls', ''], ['Tokens in', ''], ['Thinking', ''], ['Answer', '']]) hr.append(el('th', l, c)); t.append(hr);
-  for (const v of s.versions) { const tr = el('tr'); tr.append(el('td', 'l', `${v.modelLabel} ${v.effort}`), el('td', 'l mono', v.proof.modelsReported.join(', ') || '–'), el('td', 'num', `${v.proof.ok}/${v.proof.calls}`), el('td', 'num', num(v.proof.medianInputTokens)), el('td', 'num', num(v.proof.medianThinkingTokens)), el('td', 'num', secs(v.score.medianAnswerSecondsAll))); t.append(tr); }
+  const t = $('#proof'); t.textContent = ''; const hr = el('tr'); for (const [c, l] of [['Version', 'l'], ['Model reported', 'l'], ['Calls', ''], ['Tokens in', ''], ['Thinking', ''], ['Answer', ''], ['List price', '']]) hr.append(el('th', l, c)); t.append(hr);
+  for (const v of s.versions) { const tr = el('tr'); tr.append(el('td', 'l', `${v.modelLabel} ${v.effort}`), el('td', 'l mono', v.proof.modelsReported.join(', ') || '–'), el('td', 'num', `${v.proof.ok}/${v.proof.calls}`), el('td', 'num', num(v.proof.medianInputTokens)), el('td', 'num', num(v.proof.medianThinkingTokens)), el('td', 'num', secs(v.score.medianAnswerSecondsAll)), el('td', 'num', v.proof.ok ? plain(v.proof.listPriceUsd) : '–')); t.append(tr); }
   const c = s.credits; $('#costsub').textContent = `Market lookup 1 credit, each order book 5, Chainlink rounds 2. Predictefy's free plan gives ${num(c.freePlan.monthlyCredits)} credits a month.`;
   const cost = $('#cost'); cost.textContent = '';
   const tile = (label, value, note) => { const d = el('div'); d.append(el('small', null, label), el('b', 'num', value), el('span', null, note)); cost.append(d); };
@@ -423,6 +449,13 @@ function renderRules(s) {
   tile('Per window', c.perWindow == null ? '–' : num(c.perWindow, 0), `snapshot ${num(c.byKind.snapshot)} · fills ${num(c.byKind.fills)} · results ${num(c.byKind.results)}`);
   tile('Free plan lasts', c.freePlan.windowsPerMonth == null ? '–' : num(c.freePlan.windowsPerMonth) + ' windows', c.freePlan.hoursPerMonth == null ? '' : `about ${c.freePlan.hoursPerMonth} hours of this test a month`);
   tile('Claude calls', num(s.claudeCalls.total), `${s.claudeCalls.ok} answered · ${s.claudeCalls.noAnswer} ran out of time · ${s.claudeCalls.blocked} blocked`);
+  // The calls run on a Claude plan, so there is no bill; this is what Claude Code itself reports each finished call
+  // would cost at API list prices. Calls stopped at the deadline report nothing and are not in the total.
+  if (s.claudeCalls.listPriceUsd) {
+    const maxEffort = s.versions.filter(v => v.effort === 'max').reduce((sum, v) => sum + (v.proof.listPriceUsd || 0), 0);
+    tile('Claude at list prices', plain(s.claudeCalls.listPriceUsd), `Claude Code's own cost figure for the ${s.claudeCalls.ok} answers that arrived. The three max-effort versions: ${plain(maxEffort)} of it.`);
+    cost.lastChild.classList.add('wide');
+  }
 }
 
 function render() {

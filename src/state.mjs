@@ -2,7 +2,7 @@
 // Everything here is derived from the round files, so it can be rebuilt at any time.
 import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import path from 'node:path';
-import {scoreRows, hitValue, coinFlipBand, bestOfCoinFlips, pairedGap, independentGapNeeded, median} from './scoring.mjs';
+import {scoreRows, marketSides, hitValue, coinFlipBand, bestOfCoinFlips, pairedGap, independentGapNeeded, median} from './scoring.mjs';
 import {BASELINES} from './baselines.mjs';
 import {SOURCES} from './snapshot.mjs';
 import {VENUE_SOURCE} from './settle.mjs';
@@ -41,7 +41,7 @@ export function buildState(runDir, {write = false} = {}) {
 
   const versionRows = id => settled.map(r => {
     const a = r.answers[id]; const bet = r.bets[id] || null;
-    return {t0: r.t0, pUp: a?.pUp ?? null, winner: r.result.winner, status: a?.status ?? 'no_answer', bet, pnlUsd: bet?.settled?.pnlUsd ?? null, answerSeconds: a?.answerSeconds ?? null};
+    return {t0: r.t0, pUp: a?.pUp ?? null, winner: r.result.winner, status: a?.status ?? 'no_answer', bet, pnlUsd: bet?.settled?.pnlUsd ?? null, won: bet?.settled?.won ?? null, favourite: r.baselines?.favourite?.side ?? null, answerSeconds: a?.answerSeconds ?? null};
   });
   const equitySeries = (betOf) => {
     let pnl = 0; const points = [{n: 0, equityUsd: config.budgetUsd}];
@@ -58,10 +58,12 @@ export function buildState(runDir, {write = false} = {}) {
     const allBets = counted.map(r => r.bets[c.id]).filter(Boolean);
     const allAnswers = counted.map(r => r.answers[c.id]).filter(Boolean);
     const score = scoreRows(rows);
+    const sides = marketSides(rows);
     return {
       id: c.id, model: c.model, modelLabel: c.modelLabel, effort: c.effort,
       score: {
         ...score,
+        sameSideAsFavourite: sides.sameSide, withFavourite: sides.withFavourite, againstFavourite: sides.againstFavourite,
         equityUsd: Math.round((config.budgetUsd + score.pnlUsd) * 100) / 100,
         openBets: openBets.length,
         betsPlaced: allBets.length,
@@ -92,6 +94,9 @@ export function buildState(runDir, {write = false} = {}) {
     const hasProbability = rows.some(r => r.pUp != null);
     return {id: b.id, label: b.label, rule: b.rule, score: {...base, hits, hitRate: rows.length ? hits / rows.length : null, brier: hasProbability ? base.brier : null, equityUsd: Math.round((config.budgetUsd + base.pnlUsd) * 100) / 100, medianAnswerSeconds: 0}, equity: equitySeries(r => r.baselines?.[b.id]?.bet)};
   });
+
+  // With or against the market: all nine versions together, against the favourite at each snapshot.
+  const versusMarket = marketSides(config.contestants.flatMap(c => versionRows(c.id)));
 
   // How much of a gap could be luck.
   const n = settled.length;
@@ -163,7 +168,7 @@ export function buildState(runDir, {write = false} = {}) {
     rules: {text: rulesText(config), snapshotSecond: config.snapshotSecond, betCutoffSecond: config.betCutoffSecond, answerDeadlineSecond: config.answerDeadlineSecond, stakeUsd: config.stakeUsd, budgetUsd: config.budgetUsd, betRule: config.betRule, fee: config.fee, seed: config.seed, windowSeconds: config.windowSeconds, windows: config.windows, minShares: config.minShares},
     command: run.command, claudeVersion: run.claudeVersion ?? null, systemPrompt: run.systemPrompt, fillLabel: FILL_LABEL,
     sources: {...SOURCES, result: VENUE_SOURCE, resultCheck: 'GET /api/polymarket/fetchOrderBook after the close (5 credits each) and GET /api/feeds/chainlink/fetchOracleHistory (2 credits)'},
-    versions, baselines, luck, credits, claudeCalls, resultChecks, windows, inspect,
+    versions, baselines, versusMarket, luck, credits, claudeCalls, resultChecks, windows, inspect,
   };
   if (write) writeJson(path.join(runDir, 'state.json'), state);
   return state;

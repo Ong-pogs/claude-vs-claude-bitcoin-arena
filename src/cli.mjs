@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Command line for the arena.
-//   node src/cli.mjs check                     read one live snapshot through Predictefy and print it (no Claude calls)
+//   node src/cli.mjs check                     read one live snapshot through Predictefy and print it (no Claude calls);
+//                                              --prompt adds the exact prompt, --balance the credits left on the key
 //   node src/cli.mjs pilot --windows 2         a short trial in its own folder (runs/pilot-...)
 //   node src/cli.mjs launch                    start the full run as a detached background process
 //   node src/cli.mjs start                     the same run in this terminal
@@ -81,7 +82,8 @@ if (command === 'check') {
   console.log(`\n${m.title}\n${m.url}\n`);
   console.log(JSON.stringify(snapshot, null, 1));
   if (flag('prompt')) console.log('\n--- the prompt every version would get ---\n' + buildPrompt({market: m, snapshot, config}));
-  console.log(`\nPredictefy credits used by this check: ${client.totals.credits} (remaining on the key: ${client.totals.remaining ?? 'unknown'})`);
+  // The key's balance is only printed when asked for, so a shared screen or a recording does not show it.
+  console.log(`\nPredictefy credits used by this check: ${client.totals.credits}` + (flag('balance') ? ` (remaining on the key: ${client.totals.remaining ?? 'unknown'})` : ''));
 } else if (command === 'start' || command === 'pilot') {
   const {runArena} = await import('./runner.mjs');
   const pilot = command === 'pilot';

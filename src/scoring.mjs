@@ -53,6 +53,27 @@ export function scoreRows(rows) {
   };
 }
 
+// With or against the market. The favourite is the side the order book priced above 50 cents at the snapshot.
+// Counts how often the probabilities leaned the favourite's way, and what the bets on its side and against it made.
+// rows: {pUp, favourite: 'up'|'down'|null, bet: {side}|null, won, pnlUsd}
+export function marketSides(rows) {
+  const tally = () => ({bets: 0, won: 0, pnlUsd: 0});
+  const out = {answers: 0, sameSide: 0, otherSide: 0, sameSideRate: null, withFavourite: tally(), againstFavourite: tally()};
+  for (const r of rows) {
+    if (!r.favourite) continue;
+    if (r.pUp != null) {
+      out.answers++;
+      if (r.pUp !== 0.5) { if ((r.pUp > 0.5 ? 'up' : 'down') === r.favourite) out.sameSide++; else out.otherSide++; }
+    }
+    if (r.bet && r.pnlUsd != null) {
+      const side = r.bet.side === r.favourite ? out.withFavourite : out.againstFavourite;
+      side.bets++; if (r.won) side.won++; side.pnlUsd += r.pnlUsd;
+    }
+  }
+  out.sameSideRate = out.answers ? out.sameSide / out.answers : null;
+  return out;
+}
+
 // ---- How much could be luck -------------------------------------------------
 
 const logFactorialCache = [0];
