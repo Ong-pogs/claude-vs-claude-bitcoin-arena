@@ -4,7 +4,7 @@ import {secrets, UPGRADE_URL} from './env.mjs';
 
 export const BASE = 'https://data.predictefy.com';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const shorten = path => path.replace(/(outcomeId=)(\d{6})\d+(\d{4})/, '$1$2…$3');
+const shorten = path => path.replace(/(outcomeId=)(\d{6})\d+(\d{4})/, '$1$2...$3');
 
 export function createClient({onCall = () => {}, timeoutMs = 8000, retries = 2} = {}) {
   const key = secrets().PREDICTEFY_API_KEY;
