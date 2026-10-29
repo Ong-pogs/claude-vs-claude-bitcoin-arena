@@ -2,7 +2,7 @@
 
 Nine versions of Claude (Opus 5.5, Sonnet 5.5 and Haiku 5.5, each at low, high and max effort) get the same snapshot of Polymarket's 5-minute "Bitcoin Up or Down" market, at the same instant, with the same prompt. Each answers with its probability that Bitcoin finishes the window up, and a call: up, down or skip. Code places the paper bets, settles them on the market's real result and keeps score.
 
-Every number the models see comes from the [Predictefy API](https://predictefy.com/en/api?utm_source=github&utm_medium=repo&utm_campaign=nine-claudes-trade-bitcoin&utm_content=readme). The test runs on your own computer, with your own Predictefy key and your own Claude Code login. It never places a real order and never asks for a wallet key.
+Every number the models see comes from the [Predictefy API](https://predictefy.com/en/prediction-market-api?utm_source=github&utm_medium=repo&utm_campaign=nine-claudes-trade-bitcoin&utm_content=readme). The test runs on your own computer, with your own Predictefy key and your own Claude Code login. It never places a real order and never asks for a wallet key.
 
 > Paper results are not real results. Fills are simulated at the real order book: no queue position, no market impact, and the only delay is the model's own thinking time. Nothing here is a reason to expect a profit.
 
