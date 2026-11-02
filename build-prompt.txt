@@ -13,7 +13,7 @@ PREDICTEFY (base https://data.predictefy.com, header Authorization: Bearer {PRED
 - GET /api/polymarket/fetchMarkets?slug=btc-updown-5m-{window start, unix seconds}&status=all&limit=1 (1 credit): title, description (the settlement rule), and the Up and Down outcomes with their outcomeId.
 - GET /api/polymarket/fetchOrderBook?outcomeId={id} (5 credits): bids and asks as {price, size}, prices in dollars per share, sizes in shares.
 - GET /api/feeds/chainlink/fetchOracleHistory?symbol=BTC/USD&limit=30 (2 credits): Chainlink rounds {roundId, answer, updatedAt in unix seconds}, newest first, one about every 33 seconds.
-Meter every call: path, status, milliseconds, the x-credits-charged and x-credits-remaining headers. Print one log line per call and append it to predictefy-calls.jsonl. Never print the key. Retry 429 and 5xx twice with a short backoff. On 402 or PLAN_REQUIRED print https://predictefy.com/en/api as the upgrade link.
+Meter every call: path, status, milliseconds, the x-credits-charged and x-credits-remaining headers. Print one log line per call and append it to predictefy-calls.jsonl. Never print the key. Retry 429 and 5xx twice with a short backoff. On 402 or PLAN_REQUIRED print https://predictefy.com/en/prediction-market-api as the upgrade link.
 
 ONE ROUND PER 5-MINUTE WINDOW (window start t0 is a multiple of 300 seconds)
 1. At t0+33s look up the market. At t0+45s read both order books and the Chainlink rounds in parallel and build one snapshot:
